@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" 
+          content="width=device-width, initial-scale=1.0">
+    <title>Retro Pop Arcade - Play Free</title>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            background-color: #1a0933;
+            font-family: sans-serif;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        .ad-container {
+            width: 320px;
+            height: 50px;
+            margin: 5px 0;
+            background: #2d1254;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 440px;
+            background: #230b46;
+            border: 4px solid #ff007f;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .ui-panel {
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #2d1254;
+            margin-top: 8px;
+            border-radius: 8px;
+            border: 2px solid #00f0ff;
+        }
+        .score-box {
+            font-size: 16px;
+            font-weight: bold;
+            color: #00f0ff;
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 9, 51, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        .btn-play {
+            background: #00f0ff;
+            color: #1a0933;
+            border: none;
+            padding: 12px 28px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 80%;
+        }
+        .direct-link-btn {
+            display: inline-block;
+            background: linear-gradient(45deg, #ff007f, #ff0055);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 30px;
+            text-decoration: none;
+            margin-top: 15px;
+            width: 80%;
+            box-shadow: 0 0 15px #ff007f;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ========================================== -->
+    <!-- 1. ADSTERRA BANNER (TOP)                   -->
+    <!-- ========================================== -->
+    <div class="ad-container">
+        <script>
+          atOptions = {
+            'key' : '4d9fbbf03a1ad076a712cf6c3d873674',
+            'format' : 'iframe',
+            'height' : 50,
+            'width' : 320,
+            'params' : {}
+          };
+        </script>
+        <script src="https://vogueaccompanimentdiscern.com/4d9fbbf03a1ad076a712cf6c3d873674/invoke.js"></script>
+    </div>
+
+    <!-- GAME CONTAINER FRAME -->
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        
+        <div id="game-over-screen">
+            <h1 style="color:#ff007f; font-size:32px;">RETRO POP!</h1>
+            <p id="game-status-text" style="color:#00f0ff; margin-top:5px;">Tap shapes before they fall!</p>
+            
+            <button class="btn-play" onclick="startGame()">START GAME</button>
+
+            <!-- ========================================== -->
+            <!-- 2. SMARTLINK BUTTON (ON GAME OVER SCREEN) -->
+            <!-- ========================================== -->
+            <a href="https://vogueaccompanimentdiscern.com/ki7gtkt9?key=33d7a845d826f57a1948013b86aa4362" 
+               target="_blank" 
+               id="sl-btn"
+               class="direct-link-btn" 
+               style="display:none;">
+                🎁 CLAIM 2X SCORE BONUS
+            </a>
+        </div>
+    </div>
+
+    <!-- SCORE HUDS -->
+    <div class="ui-panel">
+        <div class="score-box">Score: <span id="score-val">0</span></div>
+        <div class="score-box" style="color:#ff007f;">Best: <span id="high-val">0</span></div>
+    </div>
+
+    <!-- Dynamic Holder for Popunder injection -->
+    <div id="popunder-holder"></div>
+
+    <!-- GAME ENGINE LOGIC -->
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreVal = document.getElementById('score-val');
+        const highVal = document.getElementById('high-val');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const statusText = document.getElementById('game-status-text');
+        const slBtn = document.getElementById('sl-btn');
+
+        let score = 0;
+        let highScore = localStorage.getItem('retro_high') || 0;
+        highVal.textContent = highScore;
+
+        let gameActive = false;
+        let shapes = [];
+        let spawnTimer = 0;
+        let gravity = 0.08;
+        let popunderInjected = false;
+
+        const colors = ['#ff007f', '#00f0ff', '#ffeb3b', '#4caf50'];
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Shape {
+            constructor() {
+                this.radius = Math.random() * 15 + 15;
+                this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
+                this.y = -this.radius;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = Math.random() * 1 + 1;
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.type = Math.random() > 0.5 ? 'circle' : 'square';
+            }
+            update() {
+                this.vy += gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x - this.radius < 0 || this.x + this.radius > canvas.width) {
+                    this.vx *= -1;
+                }
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                if (this.type === 'circle') {
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                } else {
+                    ctx.rect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                }
+                ctx.fill();
+            }
+        }
+
+        function startGame() {
+            score = 0;
+            scoreVal.textContent = score;
+            shapes = [];
+            gameActive = true;
+            gameOverScreen.style.display = 'none';
+            animate();
+        }
+
+        function endGame() {
+            gameActive = false;
+            gameOverScreen.style.display = 'flex';
+            gameOverScreen.querySelector('h1').textContent = "GAME OVER";
+            statusText.textContent = `Score: ${score}`;
+            
+            // Show Smartlink only when game finishes
+            slBtn.style.display = 'inline-block';
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('retro_high', highScore);
+                highVal.textContent = highScore;
+            }
+
+            // ==========================================
+            // 3. SAFE POPUNDER INJECTION
+            // ==========================================
+            // Popunder script only loads AFTER the game is over.
+            // It completely avoids messing up player tapping mechanics.
+            if (!popunderInjected) {
+                const pScript = document.createElement('script');
+                pScript.src = "https://vogueaccompanimentdiscern.com/de/1b/55/de1b55e51678a0333b9b51f9fe9aee87.js";
+                document.getElementById('popunder-holder').appendChild(pScript);
+                popunderInjected = true;
+            }
+        }
+
+        function animate() {
+            if (!gameActive) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            spawnTimer++;
+            if (spawnTimer > Math.max(20, 50 - score * 0.5)) {
+                shapes.push(new Shape());
+                spawnTimer = 0;
+            }
+            for (let i = shapes.length - 1; i >= 0; i--) {
+                shapes[i].update();
+                shapes[i].draw();
+                if (shapes[i].y - shapes[i].radius > canvas.height) {
+                    endGame();
+                    return;
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        function handleInput(e) {
+            if (!gameActive) return;
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const clickX = clientX - rect.left;
+            const clickY = clientY - rect.top;
+
+            for (let i = shapes.length - 1; i >= 0; i--) {
+                const s = shapes[i];
+                const dist = Math.hypot(clickX - s.x, clickY - s.y);
+                if (dist < s.radius + 20) {
+                    shapes.splice(i, 1);
+                    score++;
+                    scoreVal.textContent = score;
+                    break;
+                }
+            }
+        }
+
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', function(e) {
+            handleInput(e);
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
